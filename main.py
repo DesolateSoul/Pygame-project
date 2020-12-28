@@ -1,6 +1,7 @@
 from pygame import *
 import pygame
 import pyganim
+import random
 
 WINDOW_WIDTH = 1400
 WINDOW_HEIGHT = 700
@@ -8,15 +9,15 @@ DISPLAY = (WINDOW_WIDTH, WINDOW_HEIGHT)
 BACKGROUND_COLOR = "#000000"
 FPS = 60
 
-MOVE_SPEED = 7
-WIDTH = 26  # Размеры игрока
-HEIGHT = 32
+MOVE_SPEED = 14
+WIDTH = 52  # Размеры игрока
+HEIGHT = 64
 COLOR = "#888888"
-JUMP_POWER = 10
-GRAVITY = 0.35
+JUMP_POWER = 20
+GRAVITY = 0.7
 
-PLATFORM_WIDTH = 32
-PLATFORM_HEIGHT = 32
+PLATFORM_WIDTH = 64
+PLATFORM_HEIGHT = 64
 
 ANIMATION_RIGHT = [('data/run1.png', 0.1), ('data/run2.png', 0.1), ('data/run3.png', 0.1), ('data/run4.png', 0.1),
                    ('data/run5.png', 0.1), ('data/run6.png', 0.1)]
@@ -59,7 +60,6 @@ class Player(sprite.Sprite):
         #  Анимация бездействия
         self.animation_stay_right = pyganim.PygAnimation(ANIMATION_STAY_RIGHT)
         self.animation_stay_right.play()
-        self.animation_stay_right.blit(self.image, (0, 0))  # По-умолчанию, стоим
         #  Анимация прыжка влево
         self.animation_jump_left = pyganim.PygAnimation(ANIMATION_JUMP_LEFT)
         self.animation_jump_left.play()
@@ -69,6 +69,15 @@ class Player(sprite.Sprite):
 
         self.animation_stay_left = pyganim.PygAnimation(ANIMATION_STAY_LEFT)
         self.animation_stay_left.play()
+
+        self.animation_run_right.scale((WIDTH, HEIGHT))
+        self.animation_run_left.scale((WIDTH, HEIGHT))
+        self.animation_stay_right.scale((WIDTH, HEIGHT))
+        self.animation_jump_left.scale((WIDTH, HEIGHT))
+        self.animation_jump_right.scale((WIDTH, HEIGHT))
+        self.animation_stay_left.scale((WIDTH, HEIGHT))
+
+        self.animation_stay_right.blit(self.image, (0, 0))  # По-умолчанию, стоим
 
     def update(self, left, right, up, platforms):
         if up:
@@ -168,6 +177,13 @@ def generate_level(filename):
                     print("-", file=generated_level)
                 else:
                     print("", end=" ", file=generated_level)
+    with open(f"data/{filename}", mode="r", encoding="utf-8") as generated_level:
+        level = generated_level.read().splitlines()
+    for i in range(len(level[1:-1])):
+        n = random.randint(1, len(level[0][1:-1]) - 7)
+        for k in range(7):
+            level[i + 1] = level[i + 1][:n + k] + "-" + level[i + 1][n + k + 1:]
+    return level
 
 
 class Platform(sprite.Sprite):
@@ -175,6 +191,7 @@ class Platform(sprite.Sprite):
         sprite.Sprite.__init__(self)
         self.image = Surface((PLATFORM_WIDTH, PLATFORM_HEIGHT))
         self.image = image.load("data/platform.png")
+        self.image = pygame.transform.scale(self.image, (64, 64))
         self.rect = Rect(x, y, PLATFORM_WIDTH, PLATFORM_HEIGHT)
 
 
@@ -183,17 +200,15 @@ def main():
     screen = pygame.display.set_mode(DISPLAY)
     pygame.display.set_caption("Платформер")
     bg = image.load("data/background.png")
+    bg = pygame.transform.scale(bg, (4096, 2048))
     timer = pygame.time.Clock()
 
-    main_character = Player(55, 900, False, False, False)
+    main_character = Player(600, 900, False, False, False)
     objects = pygame.sprite.Group()  # Все объекты
     objects.add(main_character)
     platforms = []
 
-    generate_level("level.txt")
-    with open('data/level.txt', mode="r", encoding="utf-8") as f:
-        level = f.read().splitlines()
-
+    level = generate_level("level.txt")
     x = y = 0  # координаты установки платформ
     for line in level:
         for symbol in line:
