@@ -21,20 +21,14 @@ PLATFORM_HEIGHT = 64
 
 ANIMATION_RIGHT = [('data/run1.png', 0.1), ('data/run2.png', 0.1), ('data/run3.png', 0.1), ('data/run4.png', 0.1),
                    ('data/run5.png', 0.1), ('data/run6.png', 0.1)]
-ANIMATION_LEFT = [('data/lrun1.png', 0.1), ('data/lrun2.png', 0.1), ('data/lrun3.png', 0.1), ('data/lrun4.png', 0.1),
-                  ('data/lrun5.png', 0.1), ('data/lrun6.png', 0.1)]
-ANIMATION_JUMP_LEFT = [('data/ljump1.png', 0.2), ('data/ljump2.png', 0.2), ('data/ljump3.png', 0.2),
-                       ('data/ljump4.png', 0.2), ('data/ljump5.png', 0.2), ('data/ljump6.png', 0.2)]
 ANIMATION_JUMP_RIGHT = [('data/jump1.png', 0.2), ('data/jump2.png', 0.2), ('data/jump3.png', 0.2),
                         ('data/jump4.png', 0.2), ('data/jump5.png', 0.2), ('data/jump6.png', 0.2)]
 ANIMATION_STAY_RIGHT = [('data/idle1.png', 0.2), ('data/idle2.png', 0.2), ('data/idle3.png', 0.2),
                         ('data/idle4.png', 0.2)]
-ANIMATION_STAY_LEFT = [('data/lidle1.png', 0.2), ('data/lidle2.png', 0.2), ('data/lidle3.png', 0.2),
-                       ('data/lidle4.png', 0.2)]
 
 
 class Player(sprite.Sprite):
-    def __init__(self, x, y, move_left, move_right, move_up, gaze_direction="right"):
+    def __init__(self, x, y, move_left=False, move_right=False, move_up=False, attack=False, gaze_direction="right"):
         sprite.Sprite.__init__(self)
         self.start_pos_x = x
         self.start_pos_y = y
@@ -46,74 +40,56 @@ class Player(sprite.Sprite):
         self.y_speed = 0
         self.ground_touch = False
 
+        self.attack = attack
         self.gaze_direction = gaze_direction  # Направление взгляда
         self.image = Surface((WIDTH, HEIGHT))
         self.image.fill(Color(COLOR))
         self.rect = Rect(x, y, WIDTH, HEIGHT)  # прямоугольный объект
         self.image.set_colorkey(Color(COLOR))  # делаем фон прозрачным
         #  Анимация движения вправо
-        self.animation_run_right = pyganim.PygAnimation(ANIMATION_RIGHT)
-        self.animation_run_right.play()
-        #  Анимация движения влево
-        self.animation_run_left = pyganim.PygAnimation(ANIMATION_LEFT)
-        self.animation_run_left.play()
+        self.animation_run = pyganim.PygAnimation(ANIMATION_RIGHT)
+        self.animation_run.play()
         #  Анимация бездействия
-        self.animation_stay_right = pyganim.PygAnimation(ANIMATION_STAY_RIGHT)
-        self.animation_stay_right.play()
-        #  Анимация прыжка влево
-        self.animation_jump_left = pyganim.PygAnimation(ANIMATION_JUMP_LEFT)
-        self.animation_jump_left.play()
+        self.animation_stay = pyganim.PygAnimation(ANIMATION_STAY_RIGHT)
+        self.animation_stay.play()
         #  Анимация прыжка вправо
-        self.animation_jump_right = pyganim.PygAnimation(ANIMATION_JUMP_RIGHT)
-        self.animation_jump_right.play()
+        self.animation_jump = pyganim.PygAnimation(ANIMATION_JUMP_RIGHT)
+        self.animation_jump.play()
 
-        self.animation_stay_left = pyganim.PygAnimation(ANIMATION_STAY_LEFT)
-        self.animation_stay_left.play()
+        self.animation_run.scale((WIDTH, HEIGHT))
+        self.animation_stay.scale((WIDTH, HEIGHT))
+        self.animation_jump.scale((WIDTH, HEIGHT))
 
-        self.animation_run_right.scale((WIDTH, HEIGHT))
-        self.animation_run_left.scale((WIDTH, HEIGHT))
-        self.animation_stay_right.scale((WIDTH, HEIGHT))
-        self.animation_jump_left.scale((WIDTH, HEIGHT))
-        self.animation_jump_right.scale((WIDTH, HEIGHT))
-        self.animation_stay_left.scale((WIDTH, HEIGHT))
+        self.animation_stay.blit(self.image, (0, 0))  # По-умолчанию, стоим
 
-        self.animation_stay_right.blit(self.image, (0, 0))  # По-умолчанию, стоим
-
-    def update(self, left, right, up, platforms):
+    def update(self, left, right, up, attack, platforms):
         if up:
             if self.ground_touch:  # Прыгаем, только когда можем оттолкнуться от земли
                 self.y_speed = -JUMP_POWER
-            if self.gaze_direction == "right":
-                self.image.fill(Color(COLOR))
-                self.animation_jump_right.blit(self.image, (0, 0))
-            elif self.gaze_direction == "left":
-                self.image.fill(Color(COLOR))
-                self.animation_jump_left.blit(self.image, (0, 0))
+            self.image.fill(Color(COLOR))
+            self.animation_jump.blit(self.image, (0, 0))
         if left:
-            self.gaze_direction = "left"
             self.x_speed = -MOVE_SPEED
             self.image.fill(Color(COLOR))
             if up:
-                self.animation_jump_left.blit(self.image, (0, 0))
+                self.animation_jump.blit(self.image, (0, 0))
             else:
-                self.animation_run_left.blit(self.image, (0, 0))
+                self.animation_run.blit(self.image, (0, 0))
         if right:
-            self.gaze_direction = "right"
             self.x_speed = MOVE_SPEED
             self.image.fill(Color(COLOR))
             if up:
-                self.animation_jump_right.blit(self.image, (0, 0))
+                self.animation_jump.blit(self.image, (0, 0))
             else:
-                self.animation_run_right.blit(self.image, (0, 0))
+                self.animation_run.blit(self.image, (0, 0))
         if not (left or right):  # Стоим, когда нет указаний идти
             self.x_speed = 0
+            #  if attack:
+            #  self.image.fill(Color(COLOR))
+            #  self.animation_attack1.blit(self.image, (0, 0))
             if not up and self.ground_touch:
-                if self.gaze_direction == "right":
-                    self.image.fill(Color(COLOR))
-                    self.animation_stay_right.blit(self.image, (0, 0))
-                elif self.gaze_direction == "left":
-                    self.image.fill(Color(COLOR))
-                    self.animation_stay_left.blit(self.image, (0, 0))
+                self.image.fill(Color(COLOR))
+                self.animation_stay.blit(self.image, (0, 0))
         if not self.ground_touch:  # изменение скорости в зависимости от гравитации
             self.y_speed += GRAVITY
 
@@ -203,7 +179,7 @@ def main():
     bg = pygame.transform.scale(bg, (4096, 2048))
     timer = pygame.time.Clock()
 
-    main_character = Player(600, 900, False, False, False)
+    main_character = Player(64, 1920)
     objects = pygame.sprite.Group()  # Все объекты
     objects.add(main_character)
     platforms = []
@@ -227,6 +203,7 @@ def main():
 
     running = True
     while running:  # Основной игровой цикл
+        gaze_before = main_character.gaze_direction
         timer.tick(FPS)
         screen.blit(bg, (camera_configure(camera.state, main_character.rect).x,
                          camera_configure(camera.state, main_character.rect).y))  # Перерисовка фона
@@ -241,15 +218,29 @@ def main():
 
             if ev3nt.type == KEYDOWN and ev3nt.key == K_LEFT:
                 main_character.move_left = True
-            if ev3nt.type == KEYUP and ev3nt.key == K_RIGHT:
-                main_character.move_right = False
-
-            if ev3nt.type == KEYDOWN and ev3nt.key == K_RIGHT:
-                main_character.move_right = True
+                main_character.gaze_direction = "left"
             if ev3nt.type == KEYUP and ev3nt.key == K_LEFT:
                 main_character.move_left = False
 
-        main_character.update(main_character.move_left, main_character.move_right, main_character.move_up, platforms)
+            if ev3nt.type == KEYDOWN and ev3nt.key == K_RIGHT:
+                main_character.move_right = True
+                main_character.gaze_direction = "right"
+            if ev3nt.type == KEYUP and ev3nt.key == K_RIGHT:
+                main_character.move_right = False
+
+            if ev3nt.type == KEYDOWN and ev3nt.key == 122:
+                main_character.attack = True
+            if ev3nt.type == KEYUP and ev3nt.key == 122:
+                main_character.attack = False
+
+        gaze_after = main_character.gaze_direction
+        if gaze_before != gaze_after:
+            main_character.animation_run.flip(True, False)
+            main_character.animation_stay.flip(True, False)
+            main_character.animation_jump.flip(True, False)
+
+        main_character.update(main_character.move_left, main_character.move_right, main_character.move_up,
+                              main_character.attack, platforms)
         camera.update(main_character)
         for obj in objects:
             screen.blit(obj.image, camera.apply(obj))
