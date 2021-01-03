@@ -35,7 +35,8 @@ ANIMATION_TIME = datetime.timedelta(milliseconds=600)
 
 
 class Player(sprite.Sprite):
-    def __init__(self, x, y, move_left=False, move_right=False, move_up=False, attack=False, gaze_direction="right"):
+    def __init__(self, x, y, move_left=False, move_right=False, move_up=False, attack=False, gaze_direction="right",
+                 blocks_in_inventory=0):
         sprite.Sprite.__init__(self)
         self.start_pos_x = x
         self.start_pos_y = y
@@ -46,6 +47,7 @@ class Player(sprite.Sprite):
         self.x_speed = 0
         self.y_speed = 0
         self.ground_touch = False
+        self.blocks_in_inventory = blocks_in_inventory
 
         self.attack = attack
         self.gaze_direction = gaze_direction  # Направление взгляда
@@ -143,7 +145,19 @@ class Player(sprite.Sprite):
                     self.rect.top = platform.rect.bottom
                     self.y_speed = 0
             if self.can_attack(platform) and attack:
-                platform.update_condition(platforms, time_was)
+                platform.update_condition(platforms, time_was, self)
+
+    def place_platform(self, platforms, objects):
+        if self.blocks_in_inventory >= 1:
+            if self.gaze_direction == 'right':
+                placed_platform = Platform(self.rect.x + WIDTH, self.rect.y)
+            else:
+                placed_platform = Platform(self.rect.x - PLATFORM_WIDTH, self.rect.y)
+            if not sprite.spritecollide(placed_platform, objects, dokill=False):
+                platforms.append(placed_platform)
+                objects.add(placed_platform)
+                self.blocks_in_inventory -= 1
+        return platforms, objects
 
 
 class Camera:
@@ -203,7 +217,7 @@ class Platform(sprite.Sprite):
         self.condition = condition
         self.time_was = datetime.datetime.now()
 
-    def update_condition(self, platforms, time_was):
+    def update_condition(self, platforms, time_was, main_hero):
         if datetime.datetime.now() - self.time_was >= ANIMATION_TIME:
             if self.condition == 1:
                 self.time_was = time_was
@@ -217,6 +231,7 @@ class Platform(sprite.Sprite):
             elif self.condition == 4:
                 self.kill()
                 del platforms[platforms.index(self)]
+                main_hero.blocks_in_inventory += 1
 
 
 def main():
@@ -280,17 +295,16 @@ def main():
             if ev3nt.type == KEYUP and ev3nt.key == 122:
                 main_character.attack = False
 
+            if ev3nt.type == KEYDOWN and ev3nt.key == 120:
+                platforms, objects = main_character.place_platform(platforms, objects)
+
         gaze_after = main_character.gaze_direction
         if gaze_before != gaze_after:
             main_character.animation_run.flip(True, False)
             main_character.animation_stay.flip(True, False)
             main_character.animation_jump.flip(True, False)
-        if main_character.attack:
-            main_character.update(main_character.move_left, main_character.move_right, main_character.move_up,
-                                  main_character.attack, platforms, time_now)
-        else:
-            main_character.update(main_character.move_left, main_character.move_right, main_character.move_up,
-                                  main_character.attack, platforms)
+        main_character.update(main_character.move_left, main_character.move_right, main_character.move_up,
+                              main_character.attack, platforms)
         camera.update(main_character)
         for obj in objects:
             screen.blit(obj.image, camera.apply(obj))
