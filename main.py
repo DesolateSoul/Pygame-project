@@ -19,6 +19,7 @@ GRAVITY = 0.7
 
 PLATFORM_WIDTH = 64
 PLATFORM_HEIGHT = 64
+PLATFORM_LENGTH = 7
 
 ANIMATION_RUN = [('data/run1.png', 0.1), ('data/run2.png', 0.1), ('data/run3.png', 0.1), ('data/run4.png', 0.1),
                  ('data/run5.png', 0.1), ('data/run6.png', 0.1)]
@@ -122,10 +123,10 @@ class Player(sprite.Sprite):
 
     def can_attack(self, platform):
         if self.rect.x + WIDTH == platform.rect.x and self.rect.y == platform.rect.y \
-                and self.gaze_direction == "right":
+                and self.gaze_direction == "right" and not self.move_right:
             return True
         elif self.rect.x == platform.rect.x + PLATFORM_WIDTH and self.rect.y == platform.rect.y \
-                and self.gaze_direction == "left":
+                and self.gaze_direction == "left" and not self.move_left:
             return True
         else:
             return False
@@ -177,48 +178,54 @@ def camera_configure(camera, target_rect):
     _, _, w, h = camera
     g, t = -g + WINDOW_WIDTH / 2, -t + WINDOW_HEIGHT / 2
 
-    g = min(0, g)                           # Не движемся дальше левой границы
-    g = max(-(camera.width - WINDOW_WIDTH), g)   # Не движемся дальше правой границы
+    g = min(0, g)  # Не движемся дальше левой границы
+    g = max(-(camera.width - WINDOW_WIDTH), g)  # Не движемся дальше правой границы
     t = max(-(camera.height - WINDOW_HEIGHT), t)  # Не движемся дальше нижней границы
-    t = min(0, t)                           # Не движемся дальше верхней границы
+    t = min(0, t)  # Не движемся дальше верхней границы
     return Rect(g, t, w, h)
 
 
 def generate_level(filename):
     with open(f"data/{filename}", mode="w", encoding="utf-8") as generated_level:
-        for i in range(32):
+        for i in range(32):  # Генерация "коробки"
             for k in range(64):
                 if i == 0 or i == 31:
-                    print("-", end="", file=generated_level)
+                    print("*", end="", file=generated_level)
                     if k == 63:
                         print("", file=generated_level)
                 elif k == 0:
-                    print("-", end="", file=generated_level)
+                    print("*", end="", file=generated_level)
                 elif k == 63:
-                    print("-", file=generated_level)
+                    print("*", file=generated_level)
                 else:
                     print("", end=" ", file=generated_level)
     with open(f"data/{filename}", mode="r", encoding="utf-8") as generated_level:
         level = generated_level.read().splitlines()
-    for i in range(len(level[1:-1])):
-        n = random.randint(1, len(level[0][1:-1]) - 7)
-        for k in range(7):
-            level[i + 1] = level[i + 1][:n + k] + "-" + level[i + 1][n + k + 1:]
+        for i in range(len(level[1:-1])):  # Генерация платформ
+            n = random.randint(1, len(level[0][1:-1]) - PLATFORM_LENGTH)
+            for k in range(PLATFORM_LENGTH):
+                level[i + 1] = level[i + 1][:n + k] + "-" + level[i + 1][n + k + 1:]
+            level[3] = level[3][:61] + "**" + level[3][63:]
+            level[2] = level[2][:63] + "-"
     return level
 
 
 class Platform(sprite.Sprite):
-    def __init__(self, x, y, condition=1):
+    def __init__(self, x, y, condition=1, breakable=True):
         sprite.Sprite.__init__(self)
+        self.breakable = breakable
         self.image = Surface((PLATFORM_WIDTH, PLATFORM_HEIGHT))
-        self.image = image.load("data/platform.png")
-        self.image = pygame.transform.scale(self.image, (64, 64))
+        if self.breakable:
+            self.image = image.load("data/platform.png")
+        else:
+            self.image = image.load("data/platform_stone.png")
+        self.image = pygame.transform.scale(self.image, (PLATFORM_WIDTH, PLATFORM_HEIGHT))
         self.rect = Rect(x, y, PLATFORM_WIDTH, PLATFORM_HEIGHT)
         self.condition = condition
         self.time_was = datetime.datetime.now()
 
     def update_condition(self, platforms, time_was, main_hero):
-        if datetime.datetime.now() - self.time_was >= ANIMATION_TIME:
+        if datetime.datetime.now() - self.time_was >= ANIMATION_TIME and self.breakable:
             if self.condition == 1:
                 self.time_was = time_was
             self.condition += 1
@@ -234,12 +241,14 @@ class Platform(sprite.Sprite):
                 main_hero.blocks_in_inventory += 1
 
 
-def main():
+def main(in_menu=True, running=True, win=False):
     pygame.init()
     screen = pygame.display.set_mode(DISPLAY)
     pygame.display.set_caption("Платформер")
     bg = image.load("data/background.png")
     bg = pygame.transform.scale(bg, (4096, 2048))
+    menu_image = image.load("data/menu_image.jpg")
+    menu_image = pygame.transform.scale(menu_image, DISPLAY)
     timer = pygame.time.Clock()
     main_character = Player(64, 1920)
     objects = pygame.sprite.Group()  # Все объекты
@@ -254,6 +263,10 @@ def main():
                 platform = Platform(x, y)
                 objects.add(platform)
                 platforms.append(platform)
+            elif symbol == "*":
+                platform = Platform(x, y, breakable=False)
+                objects.add(platform)
+                platforms.append(platform)
 
             x += PLATFORM_WIDTH  # блоки платформы ставятся на ширине блоков
         y += PLATFORM_HEIGHT  # то же самое и с высотой
@@ -262,7 +275,54 @@ def main():
     total_level_width = len(level[0]) * PLATFORM_WIDTH  # Получившаяся длина уровня,
     total_level_height = len(level) * PLATFORM_HEIGHT  # высота
     camera = Camera(camera_configure, total_level_width, total_level_height)
-    running = True
+
+    font = pygame.font.Font(None, 50)
+    text1 = font.render("Приветствую в моей первой игре!", True, (255, 255, 255))
+    text1_x = WINDOW_WIDTH // 2 - text1.get_width() // 2
+    text1_y = 0
+
+    text2 = font.render("Нажмите Enter чтобы начать игру", True, (255, 255, 255))
+    text2_x = WINDOW_WIDTH // 2 - text1.get_width() // 2
+    text2_y = WINDOW_HEIGHT - text2.get_height()
+
+    text3 = font.render('Управление:', True, (255, 255, 255))
+    text3_x = WINDOW_WIDTH // 2 - text3.get_width() // 2
+    text3_y = WINDOW_HEIGHT // 4 - text3.get_height() // 4
+
+    text4 = font.render('Стрелочки - передвижение', True, (255, 255, 255))
+    text4_x = WINDOW_WIDTH // 2 - text4.get_width() // 2
+    text4_y = WINDOW_HEIGHT // 4 - text4.get_height() // 4 + text3.get_height()
+
+    text5 = font.render('Z - Атака, X - поставить платформу', True, (255, 255, 255))
+    text5_x = WINDOW_WIDTH // 2 - text5.get_width() // 2
+    text5_y = WINDOW_HEIGHT // 4 - text5.get_height() // 4 + text3.get_height() + text4.get_height()
+
+    text6 = font.render('R - начать заново', True, (255, 255, 255))
+    text6_x = WINDOW_WIDTH // 2 - text6.get_width() // 2
+    text6_y = WINDOW_HEIGHT // 4 - text6.get_height() // 4 + \
+        text3.get_height() + text4.get_height() + text5.get_height()
+
+    text7 = font.render('Найдите выход чтобы победить!', True, (255, 255, 255))
+    text7_x = WINDOW_WIDTH // 2 - text7.get_width() // 2
+    text7_y = WINDOW_HEIGHT // 4 * 3 - text7.get_height() // 4 * 3
+
+    while in_menu:  # Цикл меню
+        screen.blit(menu_image, (0, 0))
+        screen.blit(text1, (text1_x, text1_y))
+        screen.blit(text2, (text2_x, text2_y))
+        screen.blit(text3, (text3_x, text3_y))
+        screen.blit(text4, (text4_x, text4_y))
+        screen.blit(text5, (text5_x, text5_y))
+        screen.blit(text6, (text6_x, text6_y))
+        screen.blit(text7, (text7_x, text7_y))
+        for ev3nt in pygame.event.get():
+            if ev3nt.type == QUIT:
+                running = False
+                in_menu = False
+            if ev3nt.type == KEYUP and ev3nt.key == 13:
+                in_menu = False
+        pygame.display.flip()
+
     while running:  # Основной игровой цикл
         gaze_before = main_character.gaze_direction
         timer.tick(FPS)
@@ -289,14 +349,20 @@ def main():
             if ev3nt.type == KEYUP and ev3nt.key == K_RIGHT:
                 main_character.move_right = False
 
-            if ev3nt.type == KEYDOWN and ev3nt.key == 122:
+            if ev3nt.type == KEYDOWN and ev3nt.key == 122:  # Кнопка Z
                 main_character.attack = True
-                time_now = datetime.datetime.now()
             if ev3nt.type == KEYUP and ev3nt.key == 122:
                 main_character.attack = False
 
             if ev3nt.type == KEYDOWN and ev3nt.key == 120:
                 platforms, objects = main_character.place_platform(platforms, objects)
+
+            if ev3nt.type == KEYDOWN and ev3nt.key == 114:
+                return main(False)
+
+        if main_character.rect.x >= bg.get_width():
+            win = True
+            running = False
 
         gaze_after = main_character.gaze_direction
         if gaze_before != gaze_after:
@@ -309,6 +375,27 @@ def main():
         for obj in objects:
             screen.blit(obj.image, camera.apply(obj))
         pygame.display.update()
+
+    text8 = font.render("Вы победили!", True, (255, 255, 255))
+    text8_x = WINDOW_WIDTH // 2 - text8.get_width() // 2
+    text8_y = WINDOW_HEIGHT // 2 - text8.get_height() // 2
+
+    text9 = font.render("R - начать заново", True, (255, 255, 255))
+    text9_x = WINDOW_WIDTH // 2 - text9.get_width() // 2
+    text9_y = WINDOW_HEIGHT - text9.get_height()
+
+    while win:  # Цикл победной картинки
+        screen.blit(menu_image, (0, 0))
+        screen.blit(text8, (text8_x, text8_y))
+        screen.blit(text9, (text9_x, text9_y))
+        for ev3nt in pygame.event.get():
+            if ev3nt.type == QUIT:
+                win = False
+            if ev3nt.type == KEYUP and ev3nt.key == 13:
+                win = False
+            if ev3nt.type == KEYDOWN and ev3nt.key == 114:
+                return main(False)
+        pygame.display.flip()
 
 
 if __name__ == "__main__":
