@@ -323,7 +323,11 @@ def main(in_menu=True, running=True, win=False):
                 in_menu = False
         pygame.display.flip()
 
+    wood = pygame.image.load('data/platform.png')
+    wood = pygame.transform.scale(wood, (32, 32))
+
     while running:  # Основной игровой цикл
+        blocks_in_inventory = font.render(str(main_character.blocks_in_inventory), True, (255, 255, 255))
         gaze_before = main_character.gaze_direction
         timer.tick(FPS)
         screen.blit(bg, (camera_configure(camera.state, main_character.rect).x,
@@ -374,6 +378,8 @@ def main(in_menu=True, running=True, win=False):
         camera.update(main_character)
         for obj in objects:
             screen.blit(obj.image, camera.apply(obj))
+        screen.blit(blocks_in_inventory, (10, 10))
+        screen.blit(wood, (50, 10))
         pygame.display.update()
 
     text8 = font.render("Вы победили!", True, (255, 255, 255))
