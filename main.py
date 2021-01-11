@@ -9,18 +9,18 @@ WINDOW_HEIGHT = 700
 DISPLAY = (WINDOW_WIDTH, WINDOW_HEIGHT)
 BACKGROUND_COLOR = "#000000"
 FPS = 60
-
+# Постоянные для игрока
 MOVE_SPEED = 14
-WIDTH = 52  # Размеры игрока
+WIDTH = 52  # Размеры
 HEIGHT = 64
-COLOR = "#888888"
+COLOR = "#000000"
 JUMP_POWER = 20
 GRAVITY = 0.7
-
+# Постоянные для платформ
 PLATFORM_WIDTH = 64
 PLATFORM_HEIGHT = 64
 PLATFORM_LENGTH = 7
-
+# Анимации
 ANIMATION_RUN = [('data/run1.png', 0.1), ('data/run2.png', 0.1), ('data/run3.png', 0.1), ('data/run4.png', 0.1),
                  ('data/run5.png', 0.1), ('data/run6.png', 0.1)]
 ANIMATION_JUMP = [('data/jump1.png', 0.2), ('data/jump2.png', 0.2), ('data/jump3.png', 0.2),
@@ -32,6 +32,13 @@ ANIMATION_ATTACK1 = [('data/attack_1_1.png', 0.1), ('data/attack_1_2.png', 0.1),
 ANIMATION_ATTACK1_LEFT = [('data/attack_1_1_left.png', 0.1), ('data/attack_1_2_left.png', 0.1),
                           ('data/attack_1_3_left.png', 0.1), ('data/attack_1_4_left.png', 0.1),
                           ('data/attack_1_5_left.png', 0.1), ('data/attack_1_6_left.png', 0.1)]
+pygame.init()
+PLATFORM_SOUND1 = pygame.mixer.Sound('data/wood1.mp3')
+PLATFORM_SOUND2 = pygame.mixer.Sound('data/wood2.mp3')
+PLATFORM_SOUND3 = pygame.mixer.Sound('data/wood3.mp3')
+PLATFORM_SOUND4 = pygame.mixer.Sound('data/wood4.mp3')
+PLATFORM_SOUND5 = pygame.mixer.Sound('data/stone.mp3')
+PLATFORM_SOUND5.set_volume(0.1)
 ANIMATION_TIME = datetime.timedelta(milliseconds=600)
 
 
@@ -225,24 +232,35 @@ class Platform(sprite.Sprite):
         self.time_was = datetime.datetime.now()
 
     def update_condition(self, platforms, time_was, main_hero):
-        if datetime.datetime.now() - self.time_was >= ANIMATION_TIME and self.breakable:
-            if self.condition == 1:
-                self.time_was = time_was
-            self.condition += 1
-            if self.condition == 2:
-                self.time_was = datetime.datetime.now()
-            if self.condition == 3:
-                self.image = image.load("data/platform_broken.png")
-                self.image = pygame.transform.scale(self.image, (64, 64))
-                self.time_was = datetime.datetime.now()
-            elif self.condition == 4:
-                self.kill()
-                del platforms[platforms.index(self)]
-                main_hero.blocks_in_inventory += 1
+        if datetime.datetime.now() - self.time_was >= ANIMATION_TIME:
+            if self.breakable:
+                if self.condition == 1:
+                    self.time_was = time_was
+                self.condition += 1
+                if self.condition == 2:
+                    self.time_was = datetime.datetime.now()
+                if self.condition == 3:
+                    self.image = image.load("data/platform_broken.png")
+                    self.image = pygame.transform.scale(self.image, (64, 64))
+                    self.time_was = datetime.datetime.now()
+                    exec(f'PLATFORM_SOUND{random.randint(1, 3)}.play()')
+                elif self.condition == 4:
+                    self.kill()
+                    del platforms[platforms.index(self)]
+                    main_hero.blocks_in_inventory += 1
+                    PLATFORM_SOUND4.play()
+            else:
+                if self.condition == 1:
+                    self.time_was = time_was
+                self.condition += 1
+                if self.condition == 2:
+                    self.time_was = datetime.datetime.now()
+                if self.condition >= 3:
+                    self.time_was = datetime.datetime.now()
+                    PLATFORM_SOUND5.play()
 
 
 def main(in_menu=True, running=True, win=False):
-    pygame.init()
     screen = pygame.display.set_mode(DISPLAY)
     pygame.display.set_caption("Платформер")
     bg = image.load("data/background.png")
