@@ -33,18 +33,31 @@ ANIMATION_ATTACK1_LEFT = [('data/attack_1_1_left.png', 0.1), ('data/attack_1_2_l
                           ('data/attack_1_3_left.png', 0.1), ('data/attack_1_4_left.png', 0.1),
                           ('data/attack_1_5_left.png', 0.1), ('data/attack_1_6_left.png', 0.1)]
 pygame.init()
+# Звуки
 PLATFORM_SOUND1 = pygame.mixer.Sound('data/wood1.mp3')
 PLATFORM_SOUND2 = pygame.mixer.Sound('data/wood2.mp3')
 PLATFORM_SOUND3 = pygame.mixer.Sound('data/wood3.mp3')
 PLATFORM_SOUND4 = pygame.mixer.Sound('data/wood4.mp3')
 PLATFORM_SOUND5 = pygame.mixer.Sound('data/stone.mp3')
 PLATFORM_SOUND5.set_volume(0.1)
+FALL_SOUND = pygame.mixer.Sound('data/fall.mp3')
+BIG_FALL_SOUND = pygame.mixer.Sound('data/fall_big.mp3')
+WIN_SOUNDS = pygame.mixer.Sound('data/win_sounds.mp3')
 ANIMATION_TIME = datetime.timedelta(milliseconds=600)
+FONT = pygame.font.Font(None, 50)
+
+SCREEN = pygame.display.set_mode(DISPLAY)
+pygame.display.set_caption("Платформер")
+BACKGROUND = image.load("data/background.png")
+BACKGROUND = pygame.transform.scale(BACKGROUND, (4096, 2048))
+MENU_IMAGE = image.load("data/menu_image.jpg")
+MENU_IMAGE = pygame.transform.scale(MENU_IMAGE, DISPLAY)
+TIMER = pygame.time.Clock()
 
 
 class Player(sprite.Sprite):
     def __init__(self, x, y, move_left=False, move_right=False, move_up=False, attack=False, gaze_direction="right",
-                 blocks_in_inventory=0):
+                 blocks_in_inventory=0, fall_sounds=0, walk_sound_count=1):
         sprite.Sprite.__init__(self)
         self.start_pos_x = x
         self.start_pos_y = y
@@ -56,6 +69,8 @@ class Player(sprite.Sprite):
         self.y_speed = 0
         self.ground_touch = False
         self.blocks_in_inventory = blocks_in_inventory
+        self.fall_sounds = fall_sounds
+        self.walk_sound_count = walk_sound_count
 
         self.attack = attack
         self.gaze_direction = gaze_direction  # Направление взгляда
@@ -82,9 +97,9 @@ class Player(sprite.Sprite):
         self.animation_run.scale((WIDTH, HEIGHT))
         self.animation_stay.scale((WIDTH, HEIGHT))
         self.animation_jump.scale((WIDTH, HEIGHT))
-        self.animation_attack1.scale((76, 76))
-        self.animation_attack1_left.scale((76, 76))
-
+        self.animation_attack1.scale((self.animation_attack1.getRect()[2] * 2, self.animation_attack1.getRect()[3] * 2))
+        self.animation_attack1_left.scale((self.animation_attack1_left.getRect()[2] * 2,
+                                           self.animation_attack1_left.getRect()[3] * 2))
         self.animation_stay.blit(self.image, (0, 0))  # По-умолчанию, стоим
 
     def update(self, left, right, up, attack, platforms, time_was=datetime.datetime.now()):
@@ -149,6 +164,12 @@ class Player(sprite.Sprite):
                     self.rect.bottom = platform.rect.top
                     self.ground_touch = True
                     self.y_speed = 0
+                    if self.fall_sounds == 1:
+                        FALL_SOUND.play()
+                        self.fall_sounds -= 1
+                    elif self.fall_sounds == 2:
+                        BIG_FALL_SOUND.play()
+                        self.fall_sounds -= 2
                 if y_speed < 0:
                     self.rect.top = platform.rect.bottom
                     self.y_speed = 0
@@ -241,14 +262,15 @@ class Platform(sprite.Sprite):
                     self.time_was = datetime.datetime.now()
                 if self.condition == 3:
                     self.image = image.load("data/platform_broken.png")
-                    self.image = pygame.transform.scale(self.image, (64, 64))
+                    self.image = pygame.transform.scale(self.image, (PLATFORM_WIDTH, PLATFORM_WIDTH))
                     self.time_was = datetime.datetime.now()
-                    exec(f'PLATFORM_SOUND{random.randint(1, 3)}.play()')
+                    exec(f'PLATFORM_SOUND{random.randint(1, 3)}.play()')  # Случайный звук при рубке
                 elif self.condition == 4:
                     self.kill()
                     del platforms[platforms.index(self)]
-                    main_hero.blocks_in_inventory += 1
                     PLATFORM_SOUND4.play()
+                    if main_hero.blocks_in_inventory < 10:
+                        main_hero.blocks_in_inventory += 1
             else:
                 if self.condition == 1:
                     self.time_was = time_was
@@ -261,13 +283,6 @@ class Platform(sprite.Sprite):
 
 
 def main(in_menu=True, running=True, win=False):
-    screen = pygame.display.set_mode(DISPLAY)
-    pygame.display.set_caption("Платформер")
-    bg = image.load("data/background.png")
-    bg = pygame.transform.scale(bg, (4096, 2048))
-    menu_image = image.load("data/menu_image.jpg")
-    menu_image = pygame.transform.scale(menu_image, DISPLAY)
-    timer = pygame.time.Clock()
     main_character = Player(64, 1920)
     objects = pygame.sprite.Group()  # Все объекты
     objects.add(main_character)
@@ -277,11 +292,11 @@ def main(in_menu=True, running=True, win=False):
     x = y = 0  # координаты установки платформ
     for line in level:
         for symbol in line:
-            if symbol == "-":
+            if symbol == "-":  # Деревянная платформа
                 platform = Platform(x, y)
                 objects.add(platform)
                 platforms.append(platform)
-            elif symbol == "*":
+            elif symbol == "*":  # Каменная платформа
                 platform = Platform(x, y, breakable=False)
                 objects.add(platform)
                 platforms.append(platform)
@@ -294,45 +309,44 @@ def main(in_menu=True, running=True, win=False):
     total_level_height = len(level) * PLATFORM_HEIGHT  # высота
     camera = Camera(camera_configure, total_level_width, total_level_height)
 
-    font = pygame.font.Font(None, 50)
-    text1 = font.render("Приветствую в моей первой игре!", True, (255, 255, 255))
+    text1 = FONT.render("Приветствую в моей первой игре!", True, (255, 255, 255))
     text1_x = WINDOW_WIDTH // 2 - text1.get_width() // 2
     text1_y = 0
 
-    text2 = font.render("Нажмите Enter чтобы начать игру", True, (255, 255, 255))
+    text2 = FONT.render("Нажмите Enter чтобы начать игру", True, (255, 255, 255))
     text2_x = WINDOW_WIDTH // 2 - text1.get_width() // 2
     text2_y = WINDOW_HEIGHT - text2.get_height()
 
-    text3 = font.render('Управление:', True, (255, 255, 255))
+    text3 = FONT.render('Управление:', True, (255, 255, 255))
     text3_x = WINDOW_WIDTH // 2 - text3.get_width() // 2
     text3_y = WINDOW_HEIGHT // 4 - text3.get_height() // 4
 
-    text4 = font.render('Стрелочки - передвижение', True, (255, 255, 255))
+    text4 = FONT.render('Стрелочки - передвижение', True, (255, 255, 255))
     text4_x = WINDOW_WIDTH // 2 - text4.get_width() // 2
     text4_y = WINDOW_HEIGHT // 4 - text4.get_height() // 4 + text3.get_height()
 
-    text5 = font.render('Z - Атака, X - поставить платформу', True, (255, 255, 255))
+    text5 = FONT.render('Z - Атака, X - поставить платформу', True, (255, 255, 255))
     text5_x = WINDOW_WIDTH // 2 - text5.get_width() // 2
     text5_y = WINDOW_HEIGHT // 4 - text5.get_height() // 4 + text3.get_height() + text4.get_height()
 
-    text6 = font.render('R - начать заново', True, (255, 255, 255))
+    text6 = FONT.render('R - начать заново', True, (255, 255, 255))
     text6_x = WINDOW_WIDTH // 2 - text6.get_width() // 2
     text6_y = WINDOW_HEIGHT // 4 - text6.get_height() // 4 + \
         text3.get_height() + text4.get_height() + text5.get_height()
 
-    text7 = font.render('Найдите выход чтобы победить!', True, (255, 255, 255))
+    text7 = FONT.render('Найдите выход чтобы победить!', True, (255, 255, 255))
     text7_x = WINDOW_WIDTH // 2 - text7.get_width() // 2
     text7_y = WINDOW_HEIGHT // 4 * 3 - text7.get_height() // 4 * 3
 
     while in_menu:  # Цикл меню
-        screen.blit(menu_image, (0, 0))
-        screen.blit(text1, (text1_x, text1_y))
-        screen.blit(text2, (text2_x, text2_y))
-        screen.blit(text3, (text3_x, text3_y))
-        screen.blit(text4, (text4_x, text4_y))
-        screen.blit(text5, (text5_x, text5_y))
-        screen.blit(text6, (text6_x, text6_y))
-        screen.blit(text7, (text7_x, text7_y))
+        SCREEN.blit(MENU_IMAGE, (0, 0))
+        SCREEN.blit(text1, (text1_x, text1_y))
+        SCREEN.blit(text2, (text2_x, text2_y))
+        SCREEN.blit(text3, (text3_x, text3_y))
+        SCREEN.blit(text4, (text4_x, text4_y))
+        SCREEN.blit(text5, (text5_x, text5_y))
+        SCREEN.blit(text6, (text6_x, text6_y))
+        SCREEN.blit(text7, (text7_x, text7_y))
         for ev3nt in pygame.event.get():
             if ev3nt.type == QUIT:
                 running = False
@@ -340,20 +354,23 @@ def main(in_menu=True, running=True, win=False):
             if ev3nt.type == KEYUP and ev3nt.key == 13:
                 in_menu = False
         pygame.display.flip()
-
-    wood = pygame.image.load('data/platform.png')
-    wood = pygame.transform.scale(wood, (32, 32))
+    # Рисунок платформы рядом со счётчиком платформ в инвенторе
+    wood_icon = pygame.image.load('data/platform.png')
+    wood_icon = pygame.transform.scale(wood_icon, (PLATFORM_WIDTH // 2, PLATFORM_HEIGHT // 2))
 
     while running:  # Основной игровой цикл
-        blocks_in_inventory = font.render(str(main_character.blocks_in_inventory), True, (255, 255, 255))
-        gaze_before = main_character.gaze_direction
-        timer.tick(FPS)
-        screen.blit(bg, (camera_configure(camera.state, main_character.rect).x,
-                         camera_configure(camera.state, main_character.rect).y))  # Перерисовка фона
+        TIMER.tick(FPS)
+        SCREEN.blit(BACKGROUND, (camera_configure(camera.state, main_character.rect).x,
+                                 camera_configure(camera.state, main_character.rect).y))  # Перерисовка фона
+        gaze_before = main_character.gaze_direction  # Направление взгляда игрока до событий
+        if main_character.blocks_in_inventory == 10:
+            blocks_in_inventory = FONT.render(str(main_character.blocks_in_inventory), True, (255, 0, 0))
+        else:
+            blocks_in_inventory = FONT.render(str(main_character.blocks_in_inventory), True, (255, 255, 255))
+
         for ev3nt in pygame.event.get():
             if ev3nt.type == QUIT:
                 running = False
-
             if ev3nt.type == KEYDOWN and ev3nt.key == K_UP:
                 main_character.move_up = True
             if ev3nt.type == KEYUP and ev3nt.key == K_UP:
@@ -371,23 +388,29 @@ def main(in_menu=True, running=True, win=False):
             if ev3nt.type == KEYUP and ev3nt.key == K_RIGHT:
                 main_character.move_right = False
 
-            if ev3nt.type == KEYDOWN and ev3nt.key == 122:  # Кнопка Z
+            if ev3nt.type == KEYDOWN and ev3nt.key == 122:  # Кнопка Z - атака
                 main_character.attack = True
             if ev3nt.type == KEYUP and ev3nt.key == 122:
                 main_character.attack = False
 
-            if ev3nt.type == KEYDOWN and ev3nt.key == 120:
+            if ev3nt.type == KEYDOWN and ev3nt.key == 120:  # Кнопка X - поставить платформу
                 platforms, objects = main_character.place_platform(platforms, objects)
 
-            if ev3nt.type == KEYDOWN and ev3nt.key == 114:
+            if ev3nt.type == KEYDOWN and ev3nt.key == 114:  # Кнопка R - рестарт
                 return main(False)
-
-        if main_character.rect.x >= bg.get_width():
+        # Условие победы
+        if main_character.rect.x >= BACKGROUND.get_width():
             win = True
             running = False
-
+            WIN_SOUNDS.play()
+        # Проверка на то, проигрывать ли звук падения
+        if main_character.fall_sounds == 0 and main_character.y_speed >= 18:
+            main_character.fall_sounds += 1
+        elif main_character.fall_sounds == 1 and main_character.y_speed >= 36:
+            main_character.fall_sounds += 1
+        # Взгляд после событий
         gaze_after = main_character.gaze_direction
-        if gaze_before != gaze_after:
+        if gaze_before != gaze_after:  # Поворот анимаций при смене направления взгляда
             main_character.animation_run.flip(True, False)
             main_character.animation_stay.flip(True, False)
             main_character.animation_jump.flip(True, False)
@@ -395,23 +418,25 @@ def main(in_menu=True, running=True, win=False):
                               main_character.attack, platforms)
         camera.update(main_character)
         for obj in objects:
-            screen.blit(obj.image, camera.apply(obj))
-        screen.blit(blocks_in_inventory, (10, 10))
-        screen.blit(wood, (50, 10))
+            SCREEN.blit(obj.image, camera.apply(obj))
+        # Отображение счётчика блоков в инвентаре
+        SCREEN.blit(blocks_in_inventory, (10, 10))
+        SCREEN.blit(wood_icon, (50, 10))
+
         pygame.display.update()
 
-    text8 = font.render("Вы победили!", True, (255, 255, 255))
+    text8 = FONT.render("Вы победили!", True, (255, 255, 255))
     text8_x = WINDOW_WIDTH // 2 - text8.get_width() // 2
     text8_y = WINDOW_HEIGHT // 2 - text8.get_height() // 2
 
-    text9 = font.render("R - начать заново", True, (255, 255, 255))
+    text9 = FONT.render("R - начать заново", True, (255, 255, 255))
     text9_x = WINDOW_WIDTH // 2 - text9.get_width() // 2
     text9_y = WINDOW_HEIGHT - text9.get_height()
 
     while win:  # Цикл победной картинки
-        screen.blit(menu_image, (0, 0))
-        screen.blit(text8, (text8_x, text8_y))
-        screen.blit(text9, (text9_x, text9_y))
+        SCREEN.blit(MENU_IMAGE, (0, 0))
+        SCREEN.blit(text8, (text8_x, text8_y))
+        SCREEN.blit(text9, (text9_x, text9_y))
         for ev3nt in pygame.event.get():
             if ev3nt.type == QUIT:
                 win = False
